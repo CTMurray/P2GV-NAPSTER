@@ -1,0 +1,2 @@
+d.txt:hello world
+e.txt:how r u
