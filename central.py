@@ -30,32 +30,17 @@ class central:
     def addFiles(self, username, port, speed ):
         #filename = "copy of " + username + ".txt"
         val = {}
-
-        f = open("copy of {}.txt".format(username), "r")
+        print("USER: {} ".format(username))
+        f = open("{}.txt".format(username), "r")
         data = f.readlines()
 
         files = {}
         value = {}
-
+        info = ''
 
         for line in data:
-            value  = line.strip().split(" ", 1)
-            print("Value is :", value)
-            # print("Value 0 is :", value[0])
-            # print("Value 1 is :", value[1])
-
-            if value not in ["", ' ', '\n']: # != "" or value != " ":
-                #files[username] = {"filename": value[0], "desc": value[1]}
-                files = {"filename": value[0], "desc": value[1]}
-                print("Files allocated: ", files)
-
-            #val = line.split()
-            if not value: #!= "":
-
-                f.close()
-                return
-                #self.fileslist[username] = {tuple(val), username, port, speed}
-                #val[key] = value.strip()
+            info = line
+        print(info)
 
 
         #print("fileslist: ", self.fileslist)
@@ -147,6 +132,7 @@ class central:
 
     # # Function to handle all client connections and their respective commands
     def clientthread(self, conn, addr):
+        uinfo = []
         while True:
             # print(conn)
             data = conn.recv(1024)
@@ -190,19 +176,25 @@ class central:
                     data = conn.recv(chunk_size)
                     f.write(data.decode())
                     f.flush()
-                    f.close()
-                    return
-
-                while True:
-                    data = conn.recv(chunk_size)
-                    if not data: break
-                    f.write(data.decode())
-                    f.flush()
-
-                    # Indicates last of data was received
-                    if len(data) < chunk_size:
-                        f.close()
-                        break
+                else:
+                    while True:
+                        data = conn.recv(chunk_size)
+                        if not data: break
+                        f.write(data.decode())
+                        f.flush() # Indicates last of data was received
+                        if len(data) < chunk_size:
+                            break
+                f.close()
+                
+                # Parse file data
+                f = open(rfile, 'r')
+                #filelist_to_add = {u}
+                metadata = {'userinfo': [uinfo[3], uinfo[4], uinfo[5]]}
+                for line in f:
+                    line = line.split(':')
+                    metadata[line[0].strip()] = line[1].strip()
+                self.fileslist[uinfo[3]] = metadata
+                print(self.fileslist)
 
                 f.close()
                 print('Successfully received the file')

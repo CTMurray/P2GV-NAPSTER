@@ -549,7 +549,7 @@ class View:
             sock.sendall(cmd.encode("UTF-8"))
             time.sleep(1)
             # auto upload of resource files username.txt
-            cfile = 'store camaal.txt'
+            cfile = 'store {}.txt'.format(self.get_username())
             self.controller.processCmd(cfile)
 
 
