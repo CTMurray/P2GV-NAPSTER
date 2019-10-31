@@ -156,7 +156,28 @@ class central:
                     conn.send(results)  # send initial read
                     if len(results) < 1024:
                         break
-            # end LIST function
+            
+            # handle key word searching
+            if 'search' in rdata:
+                terms = rdata.split(':')
+                keyword = terms[1].strip()
+                results = ""
+
+                for user in self.fileslist:
+                    for item in self.fileslist[user]:
+                        print(item)
+                        if keyword not in item:
+                            continue
+                        else:
+                            results += ":{}|{}".format(item, user)
+
+                if results == "":
+                    results = "File not found"
+                results = bytes(results.encode())
+                while(results):
+                    conn.send(results)
+                    if (len(results) < 1024):
+                        break
 
             # store function
             if 'store' in rdata:
@@ -186,7 +207,7 @@ class central:
                             break
                 f.close()
                 
-                # Parse file data
+                # Parse file data to append data to filetables
                 f = open(rfile, 'r')
                 #filelist_to_add = {u}
                 metadata = {'userinfo': [uinfo[3], uinfo[4], uinfo[5]]}
@@ -194,7 +215,7 @@ class central:
                     line = line.split(':')
                     metadata[line[0].strip()] = line[1].strip()
                 self.fileslist[uinfo[3]] = metadata
-                print(self.fileslist)
+                #print(self.fileslist)
 
                 f.close()
                 print('Successfully received the file')

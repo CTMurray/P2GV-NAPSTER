@@ -263,7 +263,6 @@ class ftp_server:
         # try to open the file
         try:
             rfile = open(file, 'rb')  # open file passed
-
         except:
             print("File Not Found")
 
@@ -453,9 +452,19 @@ class View:
         self.searchField = tk.Entry(self.sLabelFrame)
         self.searchField.grid(column=1, row=0)
         #
+        # #search results label
+        self.searchResults = ttk.Label(self.sLabelFrame, text="Search Results")
+        self.searchResults.grid(column=1, row=1)
+        self.searchResults.grid_remove()
+
+        self.searchResult0 = ttk.Label(self.sLabelFrame, text="")
+        self.searchResult0.grid(column=0, row=2)
+        self.searchResult0.grid_remove()
+        #
         # #search button
         self.sButton = ttk.Button(self.sLabelFrame, text="search")
         self.sButton.grid(column=4, row=0)
+        self.sButton.bind('<Button-1>', self.handle_search)
         #
         # #FTP section
         # ttk.Label(win, text="FTP", relief=tk.SUNKEN).grid(column=0, row=80)
@@ -516,9 +525,24 @@ class View:
         #sock = self.controller.sock
         #sock.sendall(cmd.encode("UTF-8"))
 
-
-
-
+    def handle_search(self, value):
+        self.searchResults.grid()
+        self.searchResult0.grid()
+        self.searchResult0['text'] = "loading..."
+        
+        search = self.searchField.get()
+        results = self.controller.search(search)
+        results = results.split(':')
+        results = results[1:]
+        result_to_display = ""
+        
+        if (results == "File not found"):
+            self.searchResult0['text'] = "File not found"
+        else:
+            for result in results:
+                entry = result.split('|')
+                result_to_display += "filename: {} user:{} \n".format(entry[0], entry[1])
+            self.searchResult0['text'] = result_to_display
 
     # connect to a server
     def vconn(self, value):
@@ -601,13 +625,21 @@ class Controller:
     # process cmd after pressing Go button
     def processCmd(self, cmd):
         print("Go cmd: ", cmd)
-
         if 'quit' in cmd:
             self.sock.sendall(cmd.encode("UTF-8"))
             return
 
         self.mc.readcmd(cmd, self.sock)
 
+    # handle keyword search from view
+    def search(self, keyword):
+        keyword = "search:" + keyword
+        self.sock.send(bytes(keyword.encode())) # Send keyword to search
+        time.sleep(1)  # Added for thread timing
+        print('Successfully sent search term')
+        
+        data = self.sock.recv(1024)
+        return data.decode()
 
     #connect to server: connect host port
     def connect(self, cmd):
@@ -616,7 +648,6 @@ class Controller:
         return self.sock
 
     def quit(self, cmd, sock):
-
         self.sock  = self.mc.readcmd(cmd, sock)
 
     def setView(self, view):
