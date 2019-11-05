@@ -5,7 +5,8 @@ import sys
 import select
 from _thread import *
 import tkinter as tk #GUI
-from tkinter import ttk, scrolledtext  # Labels
+from tkinter import ttk, scrolledtext, Tk  # Labels
+from tkinter.filedialog import askopenfilename #GUI asking for file
 
 # client model
 #=========================
@@ -570,15 +571,14 @@ class View:
         #connecting to central server should only happen once
         #This sends all info from GUI used in central
         if int(port) == 9000:
+            #opens GUI asking for file
+            Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
+            filename = askopenfilename() # show an "Open" dialog box and return the path to the selected file
+            file = filename.split('/').pop()
+            cfile = 'store ' + file
             sock.sendall(cmd.encode("UTF-8"))
             time.sleep(1)
-            # auto upload of resource files username.txt
-            cfile = 'store {}.txt'.format(self.get_username())
             self.controller.processCmd(cfile)
-
-
-
-
 
 
 #controller
