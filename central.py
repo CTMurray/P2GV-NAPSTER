@@ -134,7 +134,7 @@ class central:
     def clientthread(self, conn, addr):
         uinfo = []
         while True:
-            # print(conn)
+            print(conn)
             data = conn.recv(1024)
             reply = "ACK " + data.decode()
             rdata = data.decode()
@@ -272,13 +272,15 @@ if __name__ == '__main__':
 
     print("To begin listening, enter: connect address port")
     s = -1
-    host = "localhost"
+    
+    # get ip address
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create socket
+    s.connect(("8.8.8.8", 80))
+    host = s.getsockname()[0]
     port = 9000
-
+    print(host)
     cServer = central()
-
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create socket
-
     # Attempt to bind socket to IP and port, error otherwise.
     try:
         s.bind((host, int(port)))
@@ -296,11 +298,12 @@ if __name__ == '__main__':
     while 1:
         try:
             conn, addr = s.accept()  # continuously accept client connections
-            hostname = socket.gethostname() #get hostname
-
-            # Print IP address and port# of connected client
+            #hostname = socket.gethostname() #get hostname
+            print("CONNECTED")
+            print(addr)
+            print(conn)
             print("Connected with " + addr[0] + ":" + str(addr[1]))
-            print("Your Computer Name is:" + hostname)
+            #print("Your Computer Name is:" + hostname)
 
             # Start new thread for client each connection
             #passed an empty tuple to start_new_thread based on error below
