@@ -10,7 +10,7 @@ from tkinter.filedialog import askopenfilename #GUI asking for file
 
 # client model
 #=========================
-
+"""
 class ftp_client():
 
     #sock = -1  # socket initialized as no connection
@@ -26,6 +26,8 @@ class ftp_client():
         sock = -1
         #print("Enter your command: HELP to see options or QUIT to exit")
         print("Client started")
+        
+        
         # while True:
         #     cmd = input()  # command to go to the server
         #     potential_socket = readcmd(cmd, sock)  # read command and may return a socket
@@ -202,6 +204,117 @@ class ftp_client():
             print("Invalid command")
 
         return 0
+        
+"""
+
+class ftp_client():
+
+
+    def __init__(self):
+        self.sock = -1
+        print("Client started")
+
+
+    def handle_connection(self, cmd):
+        self.inputs = cmd.split()  # splits command string into whitespace seperated text
+        self.host = self.inputs[1]
+        self.port = self.inputs[2]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # init socket
+        # connect to server
+        try:
+            self.sock.connect((self.host, int(self.port)))
+            print("Successfully connected")
+            return self.sock
+        except:
+            print("Connection Error, are you sure the server is running?")
+            return -1
+
+
+    def handle_quit(self, cmd):
+        sock.sendall(cmd.encode("UTF-8"))  # send quit to server
+        time.sleep(1)  # added because close operation timing issues
+        self.sock.close()  # close socket
+        self.sock = -1
+        return "Connection terminated\n"
+
+
+    def handle_retrieve(self, cmd):
+        chunk_size = 1024  # arbitrary chunk size but needs to be sufficient for data transfers
+        rfile = cmd[9:]  # parse file name
+        self.sock.sendall(cmd.encode('UTF-8'))  # send file request to server
+        filesize = self.sock.recv(16)  # represents the size of file requested
+
+        print('File size received is: ', filesize.decode())
+        f = open('copy2-' + rfile, 'w')  # Added to use file in same dir then run diff
+
+        if filesize <= bytes(chunk_size):
+            data = self.sock.recv(chunk_size)
+            f.write(data.decode())
+            f.flush()
+            f.close()
+            return
+
+        while True:
+            data = self.sock.recv(chunk_size)
+            if not data: break
+            # print('data=%s', (data.decode()))
+            f.write(data.decode())
+            f.flush()
+
+            # Indicates last of data was received
+            if len(data) < chunk_size:
+                f.close()
+                break
+
+        f.close()
+        print('Successfully received the file')
+
+
+    def handle_help(self):
+            return "connect address port: to connect to server\nquit: to quit\nretrieve: to retrieve files\nstore: to store files to server\nlist: to list the files on server\n"
+
+
+    def readcmd(self, rcmd, sock):
+        cmd = rcmd.lower()  # .upper()
+
+        # handle connection
+        if 'connect' in cmd:
+            if self.sock != -1:
+                print('Must be disconnected to connect to a server')
+            else:
+                return self.handle_connection(cmd)  # returns socket to main
+
+        # handle help
+        elif 'help' in cmd:
+            return self.handle_help()
+            
+
+
+        # handle quit
+        elif 'quit' in cmd:
+            # check that socket has been initialized
+            if self.sock == -1:
+                return 'Must connect to server before issuing commands\nEnter the help command for more details'
+            else:
+                return self.handle_quit(sock, cmd)
+
+        # handle retrieve
+        elif 'retrieve' in cmd:
+            # check that socket has been initialized
+            if self.sock == -1:
+                print('Must connect to server before issuing commands')
+                print('Enter the help command for more details')
+            else:
+                self.handle_retrieve(sock, cmd)
+            return 0
+
+        else:
+            print("Invalid command")
+
+        return 0
+
+
+
 #server model
 #====================================
 class ftp_server:
@@ -210,17 +323,20 @@ class ftp_server:
     # port = -1
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create socket
 
-    def __init__(self, port):
+    def __init__(self):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create socket
-        port = 8800
-
-        try:
-            s.bind(("localhost", int(port)))
-            print("Starting up at: %s port %s ", s)
-        except socket.error:
-            print("Binding failed")
-            sys.exit()
+        port = 10000
+        bound = False
+        
+        while not bound:
+            try:
+                s.bind(("localhost", int(port)))
+                print("Starting up at: %s port %s ", s)
+                bound = True
+            except socket.error:
+                print("Binding failed, trying on different port...")
+                port += 1
         print("socket bound")  # Status update
 
         s.listen()
@@ -517,12 +633,14 @@ class View:
         cmd = self.cmdField.get()
 
         #uses username to remove record from users table
-        if 'quit' in cmd:
-            cmd += " " + self.get_username()
-            self.controller.processCmd(cmd)
-            return
+        #if 'quit' in cmd:
+        #    cmd += " " + self.get_username()
+        #    self.controller.processCmd(cmd)
+        #return
 
-        self.controller.processCmd(cmd)
+        
+        self.text.insert(tk.END, self.controller.processCmd(cmd))
+        
         #sock = self.controller.sock
         #sock.sendall(cmd.encode("UTF-8"))
 
@@ -594,14 +712,25 @@ class Controller:
 
     def __init__(self, frame):
         self.root = frame #tk.Tk()
+        
+        # client to connect to the lightweight main server
         self.mc = ftp_client()
+        
+        #client and server for P2P file tranfer
+        self.mcFTP = ftp_client()
+        self.msFTP = ftp_server()
+        
+        
+        
+        
         #self.c = Controller()
         self.view = "" #View(self.root)
         #self.view = View(self.root)
         self.setView(View)
 
         #socket test to quit and remove entry from user table
-        self.sock =""
+        self.sock = ""
+        self.sockFTP = ""
         #self.init_model()
 
 
@@ -613,6 +742,7 @@ class Controller:
         self.view.__init__(self.root)
         self.root.mainloop()
 
+    # unused? 
     def init_model(self):
         self._clientModel = ftp_client()
         #self._serverModel = ftp_server.ftp_server
@@ -621,15 +751,18 @@ class Controller:
     # def controller(ftp_client, ftp_server):
     #     _clientModel = ftp_client
     #     _serverModel = ftp_server
+    
+    
 
-    # process cmd after pressing Go button
+    # process cmd for P2P File Transfer after pressing Go button
     def processCmd(self, cmd):
         print("Go cmd: ", cmd)
-        if 'quit' in cmd:
-            self.sock.sendall(cmd.encode("UTF-8"))
-            return
+        #if 'quit' in cmd:
+        #    self.sock.sendall(cmd.encode("UTF-8"))
+        #    return
+        return self.mcFTP.readcmd(cmd, self.sock)
 
-        self.mc.readcmd(cmd, self.sock)
+        #self.mc.readcmd(cmd, self.sock)
 
     # handle keyword search from view
     def search(self, keyword):
@@ -644,9 +777,13 @@ class Controller:
     #connect to server: connect host port
     def connect(self, cmd):
         #self._clientModel.handle_connection(cmd)
+        
+        # should change to seperate client that connects to the central server
+        # and client that connects to peer server
         self.sock = self.mc.handle_connection(cmd)
         return self.sock
 
+    # unused? 
     def quit(self, cmd, sock):
         self.sock  = self.mc.readcmd(cmd, sock)
 
