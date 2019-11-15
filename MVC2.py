@@ -39,9 +39,10 @@ class ftp_client():
         self.host = self.inputs[1]
         self.port = self.inputs[2]
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # init socket
-        # connect to server
+
+        # connect driver socket to server
         try:
-            sock.connect((self.host, int(self.port)))
+            sock.connect((self.host, 9000))
             print("Successfully connected")
         except:
             print("Connection Error, are you sure the server is running?")
@@ -54,13 +55,13 @@ class ftp_client():
         sock.sendall(cmd.encode("UTF-8"))  # send quit to server
         time.sleep(1)  # added because close operation timing issues
         sock.close()  # close socket
+        self.controller.listening_sock.close()
         print("Connection terminated\n")
 
-
     def handle_store(self, sock, cmd):
-        sock.sendall(cmd.encode("UTF-8"))  # send store to server
-        file = cmd[6:]
-
+        sock.sendall(cmd.encode("UTF-8")) 
+        file = cmd[6:]  # parse file name
+        print(file)
         # Size of data to send
         chunk_size = 1024
         # try to open the file
@@ -96,24 +97,30 @@ class ftp_client():
         print('Successfully sent file from client')
 
 
-    def handle_retrieve(self, sock, cmd):
-        chunk_size = 1024  # arbitrary chunk size but needs to be sufficient for data transfers
-        rfile = cmd[9:]  # parse file name
-        sock.sendall(cmd.encode('UTF-8'))  # send file request to server
-        filesize = sock.recv(16)  # represents the size of file requested
+    def retrieve_thread(self, target_file, target_ip, target_port):
+        peer_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # init socket
+        print("socket built")
+        # connect driver socket to server
+        peer_sock.connect((target_ip, int(target_port)))
+        print("peer Successfully connected")
 
+        # actually get the file from peer
+        chunk_size = 1024  # arbitrary chunk size but needs to be sufficient for data transfers
+        peer_sock.sendall(rfile.encode('UTF-8'))  # send file request to server
+        filesize = peer_sock.recv(16)  # represents the size of file requested
         print('File size received is: ', filesize.decode())
-        f = open('copy2-' + rfile, 'w')  # Added to use file in same dir then run diff
 
         if filesize <= bytes(chunk_size):
-            data = sock.recv(chunk_size)
+            data = peer_sock.recv(chunk_size)
             f.write(data.decode())
             f.flush()
             f.close()
+            peer_sock.close();
+            print("Successfully retrieved the file\n")
             return
 
         while True:
-            data = sock.recv(chunk_size)
+            data = peer_sock.recv(chunk_size)
             if not data: break
             # print('data=%s', (data.decode()))
             f.write(data.decode())
@@ -123,14 +130,23 @@ class ftp_client():
             if len(data) < chunk_size:
                 f.close()
                 break
+                peer_sock.close()
+                print('Successfully received the file')
 
-        f.close()
-        print('Successfully received the file')
 
-
-    def handle_help(self):
-        print(
-            "connect address port: to connect to server\nquit: to quit\nretrieve: to retrieve files\nstore: to store files to server\nlist: to list the files on server\n")
+    def handle_retrieve(self, sock, cmd):
+        sock.sendall(cmd.encode("UTF-8")) 
+        print("ret")
+        chunk_size = 1024  # arbitrary chunk size but needs to be sufficient for data transfers
+        rfile = cmd[9:]  # parse file name
+        sock.sendall(rfile.encode('UTF-8'))  # send file request to server
+        target = sock.recv(1024).decode().split(":")
+        target_file = target[0]
+        target_ip = target[1]
+        target_port = target[2]
+        print(target)
+        start_new_thread(self.retrieve_thread, (target_file, target_ip, target_port))
+        
 
 
     def readcmd(self, rcmd, sock):
@@ -177,6 +193,7 @@ class ftp_client():
                 self.handle_retrieve(sock, cmd)
             return 0
 
+        # handle store
         elif 'store' in cmd:
             # check that socket has been initialized
             if sock == -1:
@@ -332,23 +349,6 @@ class ftp_server:
                 conn.close()
                 break
             # End RETRIEVE function
-
-
-
-        # driver loop
-    # while 1:
-    #     try:
-    #         conn, addr = s.accept()  # continuously accept client connections
-    #         # Print IP address and port# of connected client
-    #         print("Connected with " + addr[0] + ":" + str(addr[1]))
-    #         # Start new thread for client each connection
-    #         start_new_thread(clientthread, (conn, addr,))  # ,s
-    #     except socket.error:
-    #         continue
-    #     except KeyboardInterrupt:
-    #         print("\nQuiting server...")
-    #         break
-    #     s.close()  # Close socket
 
 
 
@@ -556,7 +556,17 @@ class View:
         uname = self.get_username()
         hname = self.get_hostname()
         speed = self.get_speed()
-        uInfo += uname + " " + hname + " " + speed
+
+        # set up listening_socket
+        self.controller.listening_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create socket
+        self.controller.listening_sock.connect(("8.8.8.8", 80))
+        self.controller.listening_host = self.controller.listening_sock.getsockname()[0]
+        self.controller.listening_port = int(port) + 95
+        self.controller.listening_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.controller.listening_sock.bind((self.controller.listening_host, self.controller.listening_port))
+        self.controller.listening_sock.listen()
+
+        uInfo += uname + " " + hname + " " + speed + " " + self.controller.listening_host + " " + str(self.controller.listening_port)
 
         cmd += uInfo
 
@@ -570,15 +580,14 @@ class View:
         #central server check to send user info populating user table
         #connecting to central server should only happen once
         #This sends all info from GUI used in central
-        if int(port) == 9000:
             #opens GUI asking for file
-            Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-            filename = askopenfilename() # show an "Open" dialog box and return the path to the selected file
-            file = filename.split('/').pop()
-            cfile = 'store ' + file
-            sock.sendall(cmd.encode("UTF-8"))
-            time.sleep(1)
-            self.controller.processCmd(cfile)
+        Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
+        filename = askopenfilename() # show an "Open" dialog box and return the path to the selected file
+        file = filename.split('/').pop()
+        cfile = 'store ' + file
+        sock.sendall(cmd.encode("UTF-8"))
+        time.sleep(1)
+        self.controller.processCmd(cfile)
 
 
 #controller
@@ -611,16 +620,19 @@ class Controller:
     def run(self):
         #self.root.title("Tkinter MVC example")
         self.view.__init__(self.root)
-        self.root.mainloop()
+        while(1):
+            try:
+                self.root.update_idletasks()
+                self.root.update()
+                if self.sock != "":
+                    start_new_thread(self.peer_listening_thread, ())
+            except KeyboardInterrupt:
+                print("main loop done")
+                break
 
     def init_model(self):
         self._clientModel = ftp_client()
         #self._serverModel = ftp_server.ftp_server
-
-
-    # def controller(ftp_client, ftp_server):
-    #     _clientModel = ftp_client
-    #     _serverModel = ftp_server
 
     # process cmd after pressing Go button
     def processCmd(self, cmd):
@@ -653,6 +665,53 @@ class Controller:
     def setView(self, view):
         self._view = view
 
+    def peer_listening_thread(self):
+        while(True):
+            try:
+                # establish incoming leech connection
+                conn, addr = self.listening_sock.accept()
+                print("peer connection established")
+                file = conn.recv(16).decode
+                print("requested file name is {}".format(file))
+                # Size of data to send
+                chunk_size = 1024
+                # try to open the file
+                try:
+                    rfile = open(file, 'rb')  # open file passed
+                except:
+                    print("File Not Found")
+                    break
+
+                # Get file size and send it to the client
+                filesize = os.path.getsize(file)
+                print('File size is: ', filesize)
+                conn.send(bytes(str(filesize).encode()))
+                time.sleep(1)  # Added for thread timing
+
+                # If file size is less than or equal to chunk_size we have all the data
+                if int(filesize) <= chunk_size:
+                    s = rfile.read(chunk_size)
+                    conn.send(s)
+                    rfile.close()
+                    print('Successfully sent file')
+                    return
+
+                # File is larger than chunk_size
+                s = rfile.read(chunk_size)
+
+                # While there is data to read in the file
+                while s:
+                    conn.send(s)  # send initial read
+                    print(s.decode())  # confirm data print to screen
+                    s = rfile.read(chunk_size)  # continue to read
+                rfile.close()
+                print('Successfully sent file')
+                print('Successfully received the file')
+            except socket.error:
+                continue
+            except KeyboardInterrupt:
+                break
+
 
 if __name__ == '__main__':
     #mc = ftp_client()
@@ -665,4 +724,5 @@ if __name__ == '__main__':
 
     c.setView(v)
     c.run()
+
     #v = view()

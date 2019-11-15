@@ -13,20 +13,6 @@ class central:
         self.users = dict()
         self.fileslist = dict()
 
-    #self.users = dict()
-    """
-    users = {
-    "uname": [speed, hostname] #array rep.
-    };
-    
-    """
-
-    #fileslist = dict()
-    """
-    files = {
-    "filename": [description, remote_hostname, port#, remote_file_name, speed]
-    };
-    """
     def addFiles(self, username, port, speed ):
         #filename = "copy of " + username + ".txt"
         val = {}
@@ -41,66 +27,8 @@ class central:
         for line in data:
             info = line
         print(info)
-
-
-        #print("fileslist: ", self.fileslist)
-
         f.close()
 
-        # with open("copy of {}.txt ".format(username)) as f:
-        #     #(key, val) = [line.rstrip('\n').split(' ', 1) for line in f]
-        #     # line = []
-        #     # line.append(f.read().split())
-        #     # #line.append(f.read().splitlines())
-        #     # #values = line.split(' ', 1)
-        #     # self.fileslist = {
-        #     #     username: {
-        #     #         tuple(line[0]), username, port, speed
-        #     #     }
-        #     #
-        #     # }
-        #
-        #     fileDict = dict()
-        #     #fileDict = f.split(' ', 1)
-        #
-        #     # values = line.strip().split(' ', 1)
-        #     # print("Values 0: ", fileDict[0])
-        #     # print("Values 1: ", fileDict[1])
-        #
-        #     self.key = ""
-        #     self.val = ""
-        #
-        #
-        #
-        #     for line in f:
-        #         linfo = line.strip().split(" ", 1)
-        #        # (key, val ) = line.strip().split(' ', 1)
-        #         self.key = linfo[0]
-        #         self.val = linfo[1]
-        #
-        #         #print("Key is: ", linfo[0])
-        #         #print("Value is: ", linfo[1])
-        #         #self.fileslist = {key, val }
-        #
-        #         #fileDict = line.strip().split(' ', 1)
-        #         #values = values.remove("")
-        #         # print("Values 0: ", fileDict[0] )
-        #         # print("Values 1: ", fileDict[1])
-        #         #print("Values 2: ", values[2])
-        #         # for temp in values:
-        #         #     print("Temp is: ", temp)
-        #
-        #         # self.fileslist = {
-        #         #     username: {
-        #         #         values[0], values[1], username, port, speed
-        #         #     }
-        #         #
-        #         # }
-        #         print("Values 0: ", self.key)
-        #         print("Values 1: ", self.val)
-        #     #print("Values 0: ", fileDict[0])
-        #     #print("Values 1: ", fileDict[1])
-        #     print("files are: ", self.fileslist)
 
     #Get a list of keys from dictionary which has the given value
     def getKeysByValue(self, filelist, valueToFind):
@@ -130,11 +58,14 @@ class central:
 
         return listOfKeys
 
+    def send_retrieve_data(self, conn, addr, rfile, ruser):
+        return 0
+
     # # Function to handle all client connections and their respective commands
     def clientthread(self, conn, addr):
         uinfo = []
         while True:
-            print(conn)
+            print(addr)
             data = conn.recv(1024)
             reply = "ACK " + data.decode()
             rdata = data.decode()
@@ -145,8 +76,16 @@ class central:
 
             # Retrieve function
             if 'retrieve' in rdata:
-                rfile = rdata[9:]  # parse file name
-                print(rfile)  # confirms file name
+                params = rdata.split(' ')
+                rfile = params[1]
+                ruser = params[2]
+                target = rfile + ":" + self.users[ruser]["listening_addr"] + ":" + str(self.users[ruser]["listening_port"])
+                target = target.encode()
+                while(target):
+                    conn.send(target)
+                    if len(target) < 1024:
+                        break
+                print("sent target listening address and port")
                 # retrieve(rfile, conn)
 
             # List function
@@ -206,6 +145,7 @@ class central:
                         if len(data) < chunk_size:
                             break
                 f.close()
+                print("HIT")
                 
                 # Parse file data to append data to filetables
                 f = open(rfile, 'r')
@@ -215,7 +155,7 @@ class central:
                     line = line.split(':')
                     metadata[line[0].strip()] = line[1].strip()
                 self.fileslist[uinfo[3]] = metadata
-                #print(self.fileslist)
+                print(self.fileslist)
 
                 f.close()
                 print('Successfully received the file')
@@ -233,32 +173,20 @@ class central:
                     #printing of data in users
                     #print("Updated Users Table: ", self.users)
                     conn.close()
-                    break
 
                 # print close mesaage
                 print("Connection with " + addr[0] + ":" + str(addr[1]) + " closed")
 
                 conn.close()
-                break
+                return
 
             # connect
             if 'connect' in rdata:
                 uinfo = rdata.split() #should be all the data from the connect
-                #uinfo[3] = username
-                #uinfo[4] = speed
-                #unifo[5] = hostname
-
-                # testDict = {}
-                # testDict['guest'] = {'hostname': 'aeon/127.0.0.1', 'speed': 't1'}
-                # self.users = testDict
-
                 print("\nUser {} has joined".format(uinfo[3]))
 
                 #adding record to the user table
-                self.users[uinfo[3]] = {'port': uinfo[2], 'hostname':uinfo[4], 'speed': uinfo[5]}
-                #port = 9000
-
-                #self.addFiles(uinfo[3], uinfo[2], uinfo[5])
+                self.users[uinfo[3]] = {'address': uinfo[1], 'port': uinfo[2], 'hostname':uinfo[4], 'speed': uinfo[5], "listening_addr": uinfo[6], "listening_port": uinfo[7]}
 
                 #confirm entries
                 print("User info is: ", uinfo)
@@ -314,6 +242,6 @@ if __name__ == '__main__':
             continue
         except KeyboardInterrupt:
             print("\nQuiting server...")
-            break
-    s.close()  # Close socket
+            s.close()
+ # Close socket
 #self.users[camaal] [0] =
